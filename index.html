@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="es">
   <head>
@@ -135,120 +136,34 @@ export default function App() {
         await signInAnonymously(auth); 
       } catch (err) { 
         console.error("Error de autenticación inicial:", err); 
+=======
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistema Elemental Pro</title>
+    <!-- Cargamos Tailwind CSS para los estilos rápidos y modernos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Importamos una fuente limpia y moderna */
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+      body {
+        font-family: 'Inter', sans-serif;
+>>>>>>> d533311 (Done)
       }
-    };
-    initAuth();
-    
-    const unsubAuth = onAuthStateChanged(auth, setUser);
-    
-    // Recuperar sesión persistente local si existe
-    const savedUser = localStorage.getItem('elemental_user_id');
-    if (savedUser && USERS_DB[savedUser]) {
-      setCurrentUserData({ id: savedUser, ...USERS_DB[savedUser] });
-      if (USERS_DB[savedUser].frat !== 'all') setSelectedFrat(USERS_DB[savedUser].frat);
-    }
-    return () => unsubAuth();
-  }, []);
-
-  // Sincronización en tiempo real con Firestore
-  useEffect(() => {
-    if (!user || !currentUserData) return;
-
-    const collectionsList = [
-      { name: 'students', setter: setStudents },
-      { name: 'teachers', setter: setTeachers },
-      { name: 'subgroups', setter: setSubgroups },
-      { name: 'attendance', setter: (data) => {
-        const records = {};
-        data.forEach(item => records[item.id] = item);
-        setAttendanceRecords(records);
-      }}
-    ];
-
-    const unsubs = collectionsList.map(col => {
-      const q = query(collection(db, 'artifacts', APP_DATA_ID, 'public', 'data', col.name));
-      return onSnapshot(q, (snap) => {
-          const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          col.setter(data);
-        },
-        (err) => console.error(`Error de conexión en ${col.name}:`, err)
-      );
-    });
-
-    return () => unsubs.forEach(u => u());
-  }, [user, currentUserData]);
-
-  const handleLogin = (e) => {
-    e.preventDefault();
-    const found = USERS_DB[loginForm.user.toLowerCase()];
-    if (found && found.pass === loginForm.pass) {
-      setCurrentUserData({ id: loginForm.user.toLowerCase(), ...found });
-      localStorage.setItem('elemental_user_id', loginForm.user.toLowerCase());
-      if (found.frat !== 'all') setSelectedFrat(found.frat);
-      setLoginError(false);
-    } else {
-      setLoginError(true);
-      setTimeout(() => setLoginError(false), 3000);
-    }
-  };
-
-  const handleLogout = () => {
-    setCurrentUserData(null);
-    localStorage.removeItem('elemental_user_id');
-    setLoginForm({ user: '', pass: '' });
-  };
-
-  const showMsg = (text) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 3000);
-  };
-
-  const toggleAttendance = async (studentId) => {
-    const recordId = `${selectedDate}_${studentId}`;
-    try {
-      if (attendanceRecords[recordId]) {
-        await deleteDoc(doc(db, 'artifacts', APP_DATA_ID, 'public', 'data', 'attendance', recordId));
-      } else {
-        await setDoc(doc(db, 'artifacts', APP_DATA_ID, 'public', 'data', 'attendance', recordId), {
-          studentId, 
-          date: selectedDate, 
-          timestamp: new Date().toISOString()
-        });
+      /* Prevenimos el scroll horizontal */
+      html, body {
+        overflow-x: hidden;
       }
-    } catch (err) {
-      console.error("Error al marcar asistencia:", err);
-    }
-  };
-
-  const handleBulkUpload = async () => {
-    if (!bulkInput.trim()) return;
-    const names = bulkInput.split('\n').map(n => n.trim()).filter(n => n !== "");
-    try {
-      for (const name of names) {
-        await addDoc(collection(db, 'artifacts', APP_DATA_ID, 'public', 'data', 'students'), {
-          name,
-          fraternity: selectedFrat,
-          isLeader: false,
-          createdAt: new Date().toISOString()
-        });
-      }
-      setBulkInput('');
-      showMsg(`Cargados ${names.length} alumnos correctamente`);
-    } catch (err) {
-      console.error("Error en carga masiva:", err);
-    }
-  };
-
-  // Memorización de datos filtrados para rendimiento
-  const filteredStudents = useMemo(() => {
-    if (!currentUserData) return [];
-    if (currentUserData.frat === 'all') return students;
-    return students.filter(s => s.fraternity === currentUserData.frat);
-  }, [students, currentUserData]);
-
-  const stats = useMemo(() => {
-    const dateAttendance = Object.values(attendanceRecords).filter(r => r.date === selectedDate);
+    </style>
+  </head>
+  <body class="bg-slate-50">
+    <!-- Aquí es donde React "dibujará" toda nuestra aplicación -->
+    <div id="root"></div>
     
+<<<<<<< HEAD
     const fratStats = FRATERNITIES.map(f => {
       const totalInFrat = students.filter(s => s.fraternity === f.id).length;
       const presentInFrat = students.filter(s => 
@@ -437,3 +352,9 @@ export default function App() {
   );
 }
 >>>>>>> b67b464 (Initial commit: Sistema asistencia fraternidades)
+=======
+    <!-- Este script vincula el archivo principal de lógica que crearemos en la carpeta src -->
+    <script type="module" src="/src/App.jsx"></script>
+  </body>
+</html>
+>>>>>>> d533311 (Done)

@@ -6,6 +6,7 @@ import {
   collection, 
   addDoc, 
   onSnapshot, 
+<<<<<<< HEAD
   query, 
   serverTimestamp 
 } from 'firebase/firestore';
@@ -21,6 +22,33 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN DE TU FIREBASE (Extraída de tu imagen) ---
+=======
+  deleteDoc,
+  query,
+  where
+} from 'firebase/firestore';
+import { 
+  getAuth, 
+  signInAnonymously, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { 
+  Flame, 
+  Droplets, 
+  Wind, 
+  Mountain, 
+  ShieldCheck, 
+  LogOut, 
+  Calendar as CalendarIcon,
+  UserCheck,
+  Users,
+  CheckCircle2,
+  XCircle
+} from 'lucide-react';
+
+// --- CONFIGURACIÓN DE FIREBASE ---
+// Estos valores conectan tu App con la base de datos que mostraste en las capturas
+>>>>>>> d533311 (Done)
 const firebaseConfig = {
   apiKey: "AIzaSyBXkSECRq9cQWCbDtkG2IgRVAMEP-T4Ruw",
   authDomain: "fraternidadescbtis291.firebaseapp.com",
@@ -30,6 +58,7 @@ const firebaseConfig = {
   appId: "1:989256081963:web:9d05e75754b9b71e94406e"
 };
 
+<<<<<<< HEAD
 // Inicialización de Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -63,6 +92,81 @@ export default function App() {
   // 2. Escuchar datos en tiempo real (Regla 1 y 2)
   useEffect(() => {
     if (!user) return;
+=======
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = 'sistema-asistencia-cbtis';
+
+// --- ROLES Y FRATERNIDADES ---
+const USERS_DB = {
+  'admin': { pass: 'admin123', frat: 'all', name: 'Administrador Maestro' },
+  'fuego': { pass: 'fire', frat: 'fire', name: 'Comando Fuego' },
+  'agua': { pass: 'water', frat: 'water', name: 'Comando Agua' },
+  'tierra': { pass: 'earth', frat: 'earth', name: 'Comando Tierra' },
+  'aire': { pass: 'air', frat: 'air', name: 'Comando Aire' }
+};
+
+const FRATERNITIES = [
+  { id: 'fire', name: 'Fuego', color: 'bg-orange-600', border: 'border-orange-600', icon: <Flame size={20} /> },
+  { id: 'water', name: 'Agua', color: 'bg-blue-600', border: 'border-blue-600', icon: <Droplets size={20} /> },
+  { id: 'earth', name: 'Tierra', color: 'bg-emerald-700', border: 'border-emerald-700', icon: <Mountain size={20} /> },
+  { id: 'air', name: 'Aire', color: 'bg-sky-400', border: 'border-sky-400', icon: <Wind size={20} /> }
+];
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [session, setSession] = useState(null);
+  const [loginForm, setLoginForm] = useState({ user: '', pass: '' });
+  const [error, setError] = useState('');
+  
+  const [students, setStudents] = useState([]);
+  const [attendance, setAttendance] = useState({});
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Autenticación inicial
+  useEffect(() => {
+    const start = async () => {
+      await signInAnonymously(auth);
+    };
+    start();
+    onAuthStateChanged(auth, setUser);
+    
+    const saved = localStorage.getItem('cbtis_session');
+    if (saved) setSession(JSON.parse(saved));
+  }, []);
+
+  // Escucha de datos en tiempo real
+  useEffect(() => {
+    if (!user || !session) return;
+
+    // Alumnos
+    const unsubStudents = onSnapshot(
+      collection(db, 'artifacts', appId, 'public', 'data', 'students'),
+      (snap) => {
+        setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      }
+    );
+
+    // Asistencia del día
+    const unsubAttendance = onSnapshot(
+      collection(db, 'artifacts', appId, 'public', 'data', 'attendance'),
+      (snap) => {
+        const map = {};
+        snap.docs.forEach(d => {
+          const data = d.data();
+          if (data.date === date) map[data.studentId] = true;
+        });
+        setAttendance(map);
+      }
+    );
+
+    return () => {
+      unsubStudents();
+      unsubAttendance();
+    };
+  }, [user, session, date]);
+>>>>>>> d533311 (Done)
 
     // Usamos la ruta estricta para datos públicos según tus reglas
     const q = collection(db, 'artifacts', appId, 'public', 'data', 'asistencias');
@@ -85,6 +189,7 @@ export default function App() {
   // Función para registrar asistencia
   const registrarAsistencia = async (e) => {
     e.preventDefault();
+<<<<<<< HEAD
     if (!nombre || !grupo) {
       setMensaje({ tipo: 'error', texto: 'Por favor llena todos los campos' });
       return;
@@ -127,8 +232,104 @@ export default function App() {
           <div className="text-right hidden sm:block">
             <p className="text-xs opacity-80">ID de Sesión:</p>
             <p className="text-xs font-mono">{user?.uid || 'Iniciando...'}</p>
+=======
+    const found = USERS_DB[loginForm.user.toLowerCase()];
+    if (found && found.pass === loginForm.pass) {
+      const userSession = { id: loginForm.user.toLowerCase(), ...found };
+      setSession(userSession);
+      localStorage.setItem('cbtis_session', JSON.stringify(userSession));
+      setError('');
+    } else {
+      setError('Credenciales incorrectas');
+    }
+  };
+
+  const toggleAttendance = async (studentId) => {
+    const docId = `${date}_${studentId}`;
+    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'attendance', docId);
+    
+    if (attendance[studentId]) {
+      await deleteDoc(docRef);
+    } else {
+      await setDoc(docRef, { studentId, date, timestamp: new Date().toISOString() });
+    }
+  };
+
+  const logout = () => {
+    setSession(null);
+    localStorage.removeItem('cbtis_session');
+  };
+
+  // Filtrado de alumnos por fraternidad
+  const filteredStudents = useMemo(() => {
+    if (!session) return [];
+    if (session.frat === 'all') return students;
+    return students.filter(s => s.fraternity === session.frat);
+  }, [students, session]);
+
+  // Pantalla de Login
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl">
+          <div className="flex justify-center mb-6">
+            <div className="p-4 bg-indigo-600 rounded-2xl text-white shadow-lg">
+              <Users size={40} />
+            </div>
           </div>
+          <h1 className="text-3xl font-black text-center text-slate-800 mb-2">CBTIS 291</h1>
+          <p className="text-center text-slate-500 font-medium mb-8">Sistema de Fraternidades</p>
+          
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase ml-1 mb-1">Usuario</label>
+              <input 
+                type="text" 
+                className="w-full p-4 bg-slate-100 rounded-xl font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                value={loginForm.user}
+                onChange={e => setLoginForm({...loginForm, user: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase ml-1 mb-1">Contraseña</label>
+              <input 
+                type="password" 
+                className="w-full p-4 bg-slate-100 rounded-xl font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                value={loginForm.pass}
+                onChange={e => setLoginForm({...loginForm, pass: e.target.value})}
+              />
+            </div>
+            {error && <p className="text-red-500 text-center text-xs font-bold uppercase">{error}</p>}
+            <button className="w-full bg-slate-900 text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+              Entrar al Sistema
+            </button>
+          </form>
         </div>
+      </div>
+    );
+  }
+
+  // Interfaz Principal
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-12">
+      {/* Header */}
+      <nav className="bg-white border-b border-slate-200 sticky top-0 z-10 px-4 py-4">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="bg-indigo-600 p-2 rounded-lg text-white">
+              <ShieldCheck size={24} />
+            </div>
+            <div>
+              <h2 className="font-black text-sm uppercase leading-none">{session.name}</h2>
+              <span className="text-[10px] font-bold text-slate-400">Panel de Control</span>
+            </div>
+>>>>>>> d533311 (Done)
+          </div>
+          <button onClick={logout} className="p-2 text-slate-400 hover:text-red-500 transition-colors">
+            <LogOut size={22} />
+          </button>
+        </div>
+<<<<<<< HEAD
       </header>
 
       <main className="max-w-4xl mx-auto p-4 md:p-8 grid md:grid-cols-2 gap-8">
@@ -150,6 +351,89 @@ export default function App() {
                 className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                 placeholder="Ej. Juan Pérez López"
               />
+=======
+      </nav>
+
+      <main className="max-w-7xl mx-auto p-4 md:p-8">
+        {/* Controles */}
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
+          <div className="flex items-center gap-4">
+            <CalendarIcon className="text-indigo-600" />
+            <input 
+              type="date" 
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              className="text-xl font-black bg-transparent outline-none cursor-pointer"
+            />
+          </div>
+          <div className="flex gap-4">
+             <div className="text-center px-6 border-r border-slate-100">
+                <p className="text-[10px] font-black text-slate-400 uppercase">Total Alumnos</p>
+                <p className="text-2xl font-black">{filteredStudents.length}</p>
+             </div>
+             <div className="text-center px-6">
+                <p className="text-[10px] font-black text-indigo-400 uppercase">Presentes</p>
+                <p className="text-2xl font-black text-indigo-600">{Object.keys(attendance).length}</p>
+             </div>
+          </div>
+        </div>
+
+        {/* Rejilla de Fraternidades */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {FRATERNITIES.filter(f => session.frat === 'all' || f.id === session.frat).map(frat => (
+            <div key={frat.id} className="bg-white rounded-[2.5rem] shadow-sm border border-slate-200 flex flex-col min-h-[500px] overflow-hidden">
+              <div className={`${frat.color} p-5 text-white flex items-center justify-between`}>
+                <div className="flex items-center gap-2 font-black uppercase tracking-wider text-sm">
+                  {frat.icon} {frat.name}
+                </div>
+                <div className="bg-white/20 px-3 py-1 rounded-full text-[10px] font-bold">
+                  {filteredStudents.filter(s => s.fraternity === frat.id).length}
+                </div>
+              </div>
+              
+              <div className="p-4 flex-1 space-y-2 overflow-y-auto max-h-[600px] bg-slate-50/50">
+                {filteredStudents.filter(s => s.fraternity === frat.id).length === 0 ? (
+                  <div className="h-40 flex items-center justify-center text-slate-300 text-xs italic">
+                    Sin alumnos registrados
+                  </div>
+                ) : (
+                  filteredStudents
+                    .filter(s => s.fraternity === frat.id)
+                    .sort((a,b) => a.name.localeCompare(b.name))
+                    .map(student => {
+                      const present = attendance[student.id];
+                      return (
+                        <button
+                          key={student.id}
+                          onClick={() => toggleAttendance(student.id)}
+                          className={`w-full group relative flex items-center gap-3 p-4 rounded-2xl border-2 transition-all duration-200 ${
+                            present 
+                              ? `${frat.border} bg-white shadow-md translate-y-[-2px]` 
+                              : 'border-transparent bg-white hover:border-slate-200'
+                          }`}
+                        >
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                            present ? frat.color : 'bg-slate-100'
+                          }`}>
+                            {present ? <UserCheck className="text-white" size={20}/> : <span className="text-slate-400 font-bold">{student.name[0]}</span>}
+                          </div>
+                          <div className="flex-1 text-left">
+                            <p className={`text-xs font-black uppercase truncate ${present ? 'text-slate-900' : 'text-slate-400'}`}>
+                              {student.name}
+                            </p>
+                            <p className="text-[9px] font-bold text-slate-300">CBTIS 291 • ID: {student.id.slice(0,5)}</p>
+                          </div>
+                          {present ? (
+                            <CheckCircle2 className="text-indigo-500" size={18} />
+                          ) : (
+                            <XCircle className="text-slate-200 opacity-0 group-hover:opacity-100" size={18} />
+                          )}
+                        </button>
+                      );
+                    })
+                )}
+              </div>
+>>>>>>> d533311 (Done)
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">Grupo y Especialidad</label>
