@@ -27,7 +27,7 @@
     <script type="module" src="/src/App.jsx"></script>
   </body>
 </html>
-=======
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -134,7 +134,7 @@ export default function App() {
         await signInAnonymously(auth); 
       } catch (err) { 
         console.error("Error de autenticación inicial:", err); 
-=======
+
 <!DOCTYPE html>
 <html lang="es">
   <head>
@@ -149,7 +149,7 @@ export default function App() {
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
       body {
         font-family: 'Inter', sans-serif;
->>>>>>> d533311 (Done)
+
       }
       /* Prevenimos el scroll horizontal */
       html, body {
@@ -161,7 +161,6 @@ export default function App() {
     <!-- Aquí es donde React "dibujará" toda nuestra aplicación -->
     <div id="root"></div>
     
-<<<<<<< HEAD
     const fratStats = FRATERNITIES.map(f => {
       const totalInFrat = students.filter(s => s.fraternity === f.id).length;
       const presentInFrat = students.filter(s => 
@@ -349,8 +348,6 @@ export default function App() {
     </div>
   );
 }
->>>>>>> b67b464 (Initial commit: Sistema asistencia fraternidades)
-=======
     <!-- Este script vincula el archivo principal de lógica que crearemos en la carpeta src -->
     <script type="module" src="/src/App.jsx"></script>
   </body>
