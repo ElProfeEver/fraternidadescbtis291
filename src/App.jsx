@@ -1,510 +1,233 @@
-<<<<<<< HEAD
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { 
   getFirestore, 
   collection, 
-  doc, 
-  setDoc, 
+  addDoc, 
   onSnapshot, 
-  deleteDoc,
-  query
+  query, 
+  serverTimestamp 
 } from 'firebase/firestore';
 import { 
-  getAuth, 
-  signInAnonymously, 
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  Flame, 
-  Droplets, 
-  Wind, 
-  Mountain, 
-  ShieldCheck, 
-  LogOut, 
-  AlertCircle,
-  Calendar as CalendarIcon,
+  UserCheck, 
+  Users, 
+  ClipboardList, 
+  GraduationCap, 
   Search,
-  UserCheck
+  Clock,
+  AlertCircle,
+  CheckCircle2
 } from 'lucide-react';
 
-// --- CONFIGURACIÓN FIREBASE ---
-// IMPORTANTE: Sustituye estos valores con los de tu consola de Firebase (Proyecto -> Configuración)
+// --- CONFIGURACIÓN DE TU FIREBASE (Extraída de tu imagen) ---
 const firebaseConfig = {
-  apiKey: "TU_API_KEY", 
-  authDomain: "TU_PROJECT_ID.firebaseapp.com",
-  projectId: "TU_PROJECT_ID",
-  storageBucket: "TU_PROJECT_ID.appspot.com",
-  messagingSenderId: "TU_SENDER_ID",
-  appId: "TU_APP_ID"
+  apiKey: "AIzaSyBXkSECRq9cQWCbDtkG2IgRVAMEP-T4Ruw",
+  authDomain: "fraternidadescbtis291.firebaseapp.com",
+  projectId: "fraternidadescbtis291",
+  storageBucket: "fraternidadescbtis291.firebasestorage.app",
+  messagingSenderId: "989256081963",
+  appId: "1:989256081963:web:9d05e75754b9b71e94406e"
 };
 
-// Validación para mostrar aviso si no se han configurado las llaves
-const isConfigValid = firebaseConfig.apiKey !== "TU_API_KEY";
-
-let app, auth, db;
-if (isConfigValid) {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-}
-
-const APP_DATA_ID = 'sistema-elemental-v1';
-
-// Base de datos de acceso local (Roles)
-const USERS_DB = {
-  'admin': { pass: 'admin123', frat: 'all', name: 'Administrador Maestro' },
-  'fuego': { pass: 'fire', frat: 'fire', name: 'Comando Fuego' },
-  'agua': { pass: 'water', frat: 'water', name: 'Comando Agua' },
-  'tierra': { pass: 'earth', frat: 'earth', name: 'Comando Tierra' },
-  'aire': { pass: 'air', frat: 'air', name: 'Comando Aire' }
-};
-
-// Colores: Agua(Azul), Fuego(Rojo), Aire(Amarillo), Tierra(Verde)
-const FRATERNITIES = [
-  { id: 'fire', name: 'Fuego', color: 'bg-red-600', border: 'border-red-600', text: 'text-red-700', icon: <Flame size={20} /> },
-  { id: 'water', name: 'Agua', color: 'bg-blue-600', border: 'border-blue-600', text: 'text-blue-700', icon: <Droplets size={20} /> },
-  { id: 'earth', name: 'Tierra', color: 'bg-green-600', border: 'border-green-600', text: 'text-green-700', icon: <Mountain size={20} /> },
-  { id: 'air', name: 'Aire', color: 'bg-yellow-400', border: 'border-yellow-400', text: 'text-yellow-700', icon: <Wind size={20} /> }
-];
+// Inicialización de Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = "fraternidadescbtis291";
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [currentUserData, setCurrentUserData] = useState(null);
-  const [loginForm, setLoginForm] = useState({ user: '', pass: '' });
-  const [loginError, setLoginError] = useState(false);
-  
-  const [students, setStudents] = useState([]);
-  const [attendanceRecords, setAttendanceRecords] = useState({});
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [asistencias, setAsistencias] = useState([]);
+  const [nombre, setNombre] = useState('');
+  const [grupo, setGrupo] = useState('');
+  const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
+  const [cargando, setCargando] = useState(false);
 
-  // Manejo de Autenticación de Firebase
+  // 1. Autenticación Anónima (Regla 3)
   useEffect(() => {
-    if (!isConfigValid) return;
-    const initAuth = async () => {
-      try { await signInAnonymously(auth); } catch (err) { console.error(err); }
+    const login = async () => {
+      try {
+        await signInAnonymously(auth);
+      } catch (error) {
+        console.error("Error de Auth:", error);
+      }
     };
-    initAuth();
-    const unsubAuth = onAuthStateChanged(auth, setUser);
-    const savedUser = localStorage.getItem('elemental_user_id');
-    if (savedUser && USERS_DB[savedUser]) {
-      setCurrentUserData({ id: savedUser, ...USERS_DB[savedUser] });
-    }
-    return () => unsubAuth();
+    login();
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
   }, []);
 
-  // Sincronización en Tiempo Real con Firestore
+  // 2. Escuchar datos en tiempo real (Regla 1 y 2)
   useEffect(() => {
-    if (!isConfigValid || !user || !currentUserData) return;
-    const collectionsList = [
-      { name: 'students', setter: setStudents },
-      { name: 'attendance', setter: (data) => {
-        const records = {};
-        data.forEach(item => records[item.id] = item);
-        setAttendanceRecords(records);
-      }}
-    ];
-    const unsubs = collectionsList.map(col => {
-      const q = query(collection(db, 'artifacts', APP_DATA_ID, 'public', 'data', col.name));
-      return onSnapshot(q, (snap) => {
-          const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          col.setter(data);
-        }, (err) => console.error(err));
-    });
-    return () => unsubs.forEach(u => u());
-  }, [user, currentUserData]);
+    if (!user) return;
 
-  const handleLogin = (e) => {
+    // Usamos la ruta estricta para datos públicos según tus reglas
+    const q = collection(db, 'artifacts', appId, 'public', 'data', 'asistencias');
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const docs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      // Ordenamos en memoria para cumplir la Regla 2 (No queries complejas)
+      const ordenados = docs.sort((a, b) => b.fecha?.seconds - a.fecha?.seconds);
+      setAsistencias(ordenados);
+    }, (error) => {
+      console.error("Error en Snapshot:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Función para registrar asistencia
+  const registrarAsistencia = async (e) => {
     e.preventDefault();
-    const found = USERS_DB[loginForm.user.toLowerCase()];
-    if (found && found.pass === loginForm.pass) {
-      setCurrentUserData({ id: loginForm.user.toLowerCase(), ...found });
-      localStorage.setItem('elemental_user_id', loginForm.user.toLowerCase());
-      setLoginError(false);
-    } else {
-      setLoginError(true);
+    if (!nombre || !grupo) {
+      setMensaje({ tipo: 'error', texto: 'Por favor llena todos los campos' });
+      return;
+    }
+
+    setCargando(true);
+    try {
+      const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'asistencias');
+      await addDoc(colRef, {
+        nombre,
+        grupo,
+        fecha: serverTimestamp(),
+        userId: user.uid
+      });
+      
+      setNombre('');
+      setGrupo('');
+      setMensaje({ tipo: 'exito', texto: '¡Asistencia registrada correctamente!' });
+      
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+    } catch (error) {
+      setMensaje({ tipo: 'error', texto: 'Error al guardar en Firebase' });
+    } finally {
+      setCargando(false);
     }
   };
-
-  const toggleAttendance = async (studentId) => {
-    if (!isConfigValid) return;
-    const recordId = `${selectedDate}_${studentId}`;
-    try {
-      if (attendanceRecords[recordId]) {
-        await deleteDoc(doc(db, 'artifacts', APP_DATA_ID, 'public', 'data', 'attendance', recordId));
-      } else {
-        await setDoc(doc(db, 'artifacts', APP_DATA_ID, 'public', 'data', 'attendance', recordId), {
-          studentId, date: selectedDate, timestamp: new Date().toISOString()
-        });
-      }
-    } catch (err) { console.error(err); }
-  };
-
-  const filteredStudents = useMemo(() => {
-    if (!currentUserData) return [];
-    if (currentUserData.frat === 'all') return students;
-    return students.filter(s => s.fraternity === currentUserData.frat);
-  }, [students, currentUserData]);
-
-  // Interfaz de error si no hay llaves de Firebase
-  if (!isConfigValid) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-white text-center">
-        <div className="max-w-md bg-slate-800 p-10 rounded-3xl border border-red-500 shadow-2xl">
-          <AlertCircle size={64} className="mx-auto mb-6 text-red-500 animate-pulse" />
-          <h2 className="text-2xl font-black mb-4 uppercase tracking-tighter">Configuración Pendiente</h2>
-          <p className="text-slate-400 text-sm mb-6">Faltan las credenciales de Firebase. Edita la variable <code className="bg-slate-700 px-2 py-1 rounded">firebaseConfig</code> en <code className="text-indigo-400">App.jsx</code>.</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Interfaz de Inicio de Sesión
-  if (!currentUserData) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-[3rem] p-12 text-center shadow-2xl">
-          <h1 className="text-3xl font-black text-slate-800 mb-8 tracking-tighter uppercase">Sistema Elemental</h1>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input type="text" placeholder="Usuario" className="w-full p-5 bg-slate-50 border-2 rounded-2xl text-center font-bold outline-none focus:border-indigo-500 transition-all" value={loginForm.user} onChange={(e) => setLoginForm({...loginForm, user: e.target.value})} />
-            <input type="password" placeholder="Contraseña" className="w-full p-5 bg-slate-50 border-2 rounded-2xl text-center font-bold outline-none focus:border-indigo-500 transition-all" value={loginForm.pass} onChange={(e) => setLoginForm({...loginForm, pass: e.target.value})} />
-            {loginError && <p className="text-red-500 text-xs font-bold uppercase tracking-widest">Credenciales no válidas</p>}
-            <button className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:shadow-xl transition-all">Entrar</button>
-          </form>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] p-4 lg:p-8 font-sans">
-      <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
-        <div className="flex items-center gap-4">
-          <div className="bg-slate-900 p-4 rounded-2xl text-white shadow-xl"><ShieldCheck size={32} /></div>
-          <div>
-            <h1 className="text-2xl font-black uppercase text-slate-900 tracking-tight">{currentUserData.name}</h1>
-            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Conexión Segura</p>
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      {/* Header */}
+      <header className="bg-blue-700 text-white p-6 shadow-lg">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <GraduationCap size={32} />
+            <div>
+              <h1 className="text-xl font-bold">CBTIS No. 291</h1>
+              <p className="text-blue-100 text-sm">Sistema de Pase de Lista</p>
+            </div>
+          </div>
+          <div className="text-right hidden sm:block">
+            <p className="text-xs opacity-80">ID de Sesión:</p>
+            <p className="text-xs font-mono">{user?.uid || 'Iniciando...'}</p>
           </div>
         </div>
-        <button onClick={() => {setCurrentUserData(null); localStorage.removeItem('elemental_user_id');}} className="p-4 bg-white text-red-500 hover:bg-red-50 rounded-2xl transition-all shadow-sm border border-slate-100"><LogOut size={20} /></button>
       </header>
 
-      <main className="max-w-7xl mx-auto">
-        {/* Selector de Fecha y Estadísticas rápidas */}
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 mb-8 flex flex-col md:flex-row justify-between items-center shadow-sm gap-6">
-          <div className="flex items-center gap-4">
-            <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600"><CalendarIcon size={24}/></div>
-            <input type="date" className="text-2xl font-black outline-none bg-transparent cursor-pointer text-slate-800" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
+      <main className="max-w-4xl mx-auto p-4 md:p-8 grid md:grid-cols-2 gap-8">
+        
+        {/* Formulario de Registro */}
+        <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="flex items-center gap-2 mb-6 text-blue-700">
+            <UserCheck size={24} />
+            <h2 className="text-lg font-semibold">Registrar mi Entrada</h2>
           </div>
-          <div className="flex gap-12">
-            <div className="text-center">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Presentes</p>
-              <p className="text-3xl font-black text-indigo-600">{filteredStudents.filter(s => attendanceRecords[`${selectedDate}_${s.id}`]).length}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Grupo</p>
-              <p className="text-3xl font-black text-slate-800">{filteredStudents.length}</p>
-            </div>
-          </div>
-        </div>
 
-        {/* Rejilla de Fraternidades */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {FRATERNITIES.filter(f => currentUserData.frat === 'all' || f.id === currentUserData.frat).map(frat => (
-            <div key={frat.id} className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[550px]">
-              <div className={`${frat.color} p-6 text-white flex items-center gap-3 font-black uppercase text-sm tracking-widest shadow-inner`}>
-                {frat.icon} {frat.name}
+          <form onSubmit={registrarAsistencia} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">Nombre Completo</label>
+              <input 
+                type="text" 
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                placeholder="Ej. Juan Pérez López"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">Grupo y Especialidad</label>
+              <input 
+                type="text" 
+                value={grupo}
+                onChange={(e) => setGrupo(e.target.value)}
+                className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                placeholder="Ej. 4A - Programación"
+              />
+            </div>
+
+            {mensaje.texto && (
+              <div className={`p-4 rounded-xl flex items-center gap-2 ${
+                mensaje.tipo === 'exito' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {mensaje.tipo === 'exito' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+                <span className="text-sm font-medium">{mensaje.texto}</span>
               </div>
-              <div className="p-4 space-y-2 overflow-y-auto flex-1 bg-slate-50/30">
-                {filteredStudents.filter(s => s.fraternity === frat.id).length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center opacity-20 py-20 text-slate-400">
-                    <Search size={48} />
-                    <p className="text-[10px] font-black uppercase mt-2">Sin Alumnos</p>
-                  </div>
-                ) : (
-                  filteredStudents
-                    .filter(s => s.fraternity === frat.id)
-                    .sort((a,b) => a.name.localeCompare(b.name))
-                    .map(student => {
-                      const isPresent = attendanceRecords[`${selectedDate}_${student.id}`];
-                      return (
-                        <button 
-                          key={student.id} 
-                          onClick={() => toggleAttendance(student.id)} 
-                          className={`w-full flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                            isPresent ? `${frat.border} bg-white shadow-md scale-[1.02]` : 'border-transparent bg-white shadow-sm hover:border-slate-100'
-                          }`}
-                        >
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-black transition-all shadow-sm ${isPresent ? frat.color : 'bg-slate-100 text-slate-300'}`}>
-                            {isPresent ? <UserCheck size={20}/> : student.name[0]}
-                          </div>
-                          <span className={`text-xs font-black text-left flex-1 truncate ${isPresent ? 'text-slate-900' : 'text-slate-400'}`}>
-                            {student.name}
-                          </span>
-                        </button>
-                      );
-                    })
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </main>
-    </div>
-  );
-=======
-import React, { useState, useEffect, useMemo } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  setDoc, 
-  onSnapshot, 
-  deleteDoc,
-  query
-} from 'firebase/firestore';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  Flame, 
-  Droplets, 
-  Wind, 
-  Mountain, 
-  ShieldCheck, 
-  LogOut, 
-  AlertCircle,
-  Calendar as CalendarIcon,
-  Search,
-  UserCheck
-} from 'lucide-react';
+            )}
 
-// --- CONFIGURACIÓN FIREBASE ---
-// IMPORTANTE: Sustituye estos valores con los de tu consola de Firebase (Proyecto -> Configuración)
-const firebaseConfig = {
-  apiKey: "TU_API_KEY", 
-  authDomain: "TU_PROJECT_ID.firebaseapp.com",
-  projectId: "TU_PROJECT_ID",
-  storageBucket: "TU_PROJECT_ID.appspot.com",
-  messagingSenderId: "TU_SENDER_ID",
-  appId: "TU_APP_ID"
-};
-
-// Validación para mostrar aviso si no se han configurado las llaves
-const isConfigValid = firebaseConfig.apiKey !== "TU_API_KEY";
-
-let app, auth, db;
-if (isConfigValid) {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-}
-
-const APP_DATA_ID = 'sistema-elemental-v1';
-
-// Base de datos de acceso local (Roles)
-const USERS_DB = {
-  'admin': { pass: 'admin123', frat: 'all', name: 'Administrador Maestro' },
-  'fuego': { pass: 'fire', frat: 'fire', name: 'Comando Fuego' },
-  'agua': { pass: 'water', frat: 'water', name: 'Comando Agua' },
-  'tierra': { pass: 'earth', frat: 'earth', name: 'Comando Tierra' },
-  'aire': { pass: 'air', frat: 'air', name: 'Comando Aire' }
-};
-
-// Colores: Agua(Azul), Fuego(Rojo), Aire(Amarillo), Tierra(Verde)
-const FRATERNITIES = [
-  { id: 'fire', name: 'Fuego', color: 'bg-red-600', border: 'border-red-600', text: 'text-red-700', icon: <Flame size={20} /> },
-  { id: 'water', name: 'Agua', color: 'bg-blue-600', border: 'border-blue-600', text: 'text-blue-700', icon: <Droplets size={20} /> },
-  { id: 'earth', name: 'Tierra', color: 'bg-green-600', border: 'border-green-600', text: 'text-green-700', icon: <Mountain size={20} /> },
-  { id: 'air', name: 'Aire', color: 'bg-yellow-400', border: 'border-yellow-400', text: 'text-yellow-700', icon: <Wind size={20} /> }
-];
-
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [currentUserData, setCurrentUserData] = useState(null);
-  const [loginForm, setLoginForm] = useState({ user: '', pass: '' });
-  const [loginError, setLoginError] = useState(false);
-  
-  const [students, setStudents] = useState([]);
-  const [attendanceRecords, setAttendanceRecords] = useState({});
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-
-  // Manejo de Autenticación de Firebase
-  useEffect(() => {
-    if (!isConfigValid) return;
-    const initAuth = async () => {
-      try { await signInAnonymously(auth); } catch (err) { console.error(err); }
-    };
-    initAuth();
-    const unsubAuth = onAuthStateChanged(auth, setUser);
-    const savedUser = localStorage.getItem('elemental_user_id');
-    if (savedUser && USERS_DB[savedUser]) {
-      setCurrentUserData({ id: savedUser, ...USERS_DB[savedUser] });
-    }
-    return () => unsubAuth();
-  }, []);
-
-  // Sincronización en Tiempo Real con Firestore
-  useEffect(() => {
-    if (!isConfigValid || !user || !currentUserData) return;
-    const collectionsList = [
-      { name: 'students', setter: setStudents },
-      { name: 'attendance', setter: (data) => {
-        const records = {};
-        data.forEach(item => records[item.id] = item);
-        setAttendanceRecords(records);
-      }}
-    ];
-    const unsubs = collectionsList.map(col => {
-      const q = query(collection(db, 'artifacts', APP_DATA_ID, 'public', 'data', col.name));
-      return onSnapshot(q, (snap) => {
-          const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          col.setter(data);
-        }, (err) => console.error(err));
-    });
-    return () => unsubs.forEach(u => u());
-  }, [user, currentUserData]);
-
-  const handleLogin = (e) => {
-    e.preventDefault();
-    const found = USERS_DB[loginForm.user.toLowerCase()];
-    if (found && found.pass === loginForm.pass) {
-      setCurrentUserData({ id: loginForm.user.toLowerCase(), ...found });
-      localStorage.setItem('elemental_user_id', loginForm.user.toLowerCase());
-      setLoginError(false);
-    } else {
-      setLoginError(true);
-    }
-  };
-
-  const toggleAttendance = async (studentId) => {
-    if (!isConfigValid) return;
-    const recordId = `${selectedDate}_${studentId}`;
-    try {
-      if (attendanceRecords[recordId]) {
-        await deleteDoc(doc(db, 'artifacts', APP_DATA_ID, 'public', 'data', 'attendance', recordId));
-      } else {
-        await setDoc(doc(db, 'artifacts', APP_DATA_ID, 'public', 'data', 'attendance', recordId), {
-          studentId, date: selectedDate, timestamp: new Date().toISOString()
-        });
-      }
-    } catch (err) { console.error(err); }
-  };
-
-  const filteredStudents = useMemo(() => {
-    if (!currentUserData) return [];
-    if (currentUserData.frat === 'all') return students;
-    return students.filter(s => s.fraternity === currentUserData.frat);
-  }, [students, currentUserData]);
-
-  // Interfaz de error si no hay llaves de Firebase
-  if (!isConfigValid) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-white text-center">
-        <div className="max-w-md bg-slate-800 p-10 rounded-3xl border border-red-500 shadow-2xl">
-          <AlertCircle size={64} className="mx-auto mb-6 text-red-500 animate-pulse" />
-          <h2 className="text-2xl font-black mb-4 uppercase tracking-tighter">Configuración Pendiente</h2>
-          <p className="text-slate-400 text-sm mb-6">Faltan las credenciales de Firebase. Edita la variable <code className="bg-slate-700 px-2 py-1 rounded">firebaseConfig</code> en <code className="text-indigo-400">App.jsx</code>.</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Interfaz de Inicio de Sesión
-  if (!currentUserData) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-[3rem] p-12 text-center shadow-2xl">
-          <h1 className="text-3xl font-black text-slate-800 mb-8 tracking-tighter uppercase">Sistema Elemental</h1>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input type="text" placeholder="Usuario" className="w-full p-5 bg-slate-50 border-2 rounded-2xl text-center font-bold outline-none focus:border-indigo-500 transition-all" value={loginForm.user} onChange={(e) => setLoginForm({...loginForm, user: e.target.value})} />
-            <input type="password" placeholder="Contraseña" className="w-full p-5 bg-slate-50 border-2 rounded-2xl text-center font-bold outline-none focus:border-indigo-500 transition-all" value={loginForm.pass} onChange={(e) => setLoginForm({...loginForm, pass: e.target.value})} />
-            {loginError && <p className="text-red-500 text-xs font-bold uppercase tracking-widest">Credenciales no válidas</p>}
-            <button className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:shadow-xl transition-all">Entrar</button>
+            <button 
+              disabled={cargando}
+              className={`w-full py-3 rounded-xl font-bold text-white transition-all shadow-md active:scale-95 ${
+                cargando ? 'bg-slate-400' : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              {cargando ? 'Guardando...' : 'Confirmar Asistencia'}
+            </button>
           </form>
-        </div>
-      </div>
-    );
-  }
+        </section>
 
-  return (
-    <div className="min-h-screen bg-[#f8fafc] p-4 lg:p-8 font-sans">
-      <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
-        <div className="flex items-center gap-4">
-          <div className="bg-slate-900 p-4 rounded-2xl text-white shadow-xl"><ShieldCheck size={32} /></div>
-          <div>
-            <h1 className="text-2xl font-black uppercase text-slate-900 tracking-tight">{currentUserData.name}</h1>
-            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Conexión Segura</p>
-          </div>
-        </div>
-        <button onClick={() => {setCurrentUserData(null); localStorage.removeItem('elemental_user_id');}} className="p-4 bg-white text-red-500 hover:bg-red-50 rounded-2xl transition-all shadow-sm border border-slate-100"><LogOut size={20} /></button>
-      </header>
-
-      <main className="max-w-7xl mx-auto">
-        {/* Selector de Fecha y Estadísticas rápidas */}
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 mb-8 flex flex-col md:flex-row justify-between items-center shadow-sm gap-6">
-          <div className="flex items-center gap-4">
-            <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600"><CalendarIcon size={24}/></div>
-            <input type="date" className="text-2xl font-black outline-none bg-transparent cursor-pointer text-slate-800" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
-          </div>
-          <div className="flex gap-12">
-            <div className="text-center">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Presentes</p>
-              <p className="text-3xl font-black text-indigo-600">{filteredStudents.filter(s => attendanceRecords[`${selectedDate}_${s.id}`]).length}</p>
+        {/* Listado de Asistencias */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between text-slate-700 px-2">
+            <div className="flex items-center gap-2 font-semibold">
+              <ClipboardList size={20} />
+              <span>Registros de hoy</span>
             </div>
-            <div className="text-center">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Grupo</p>
-              <p className="text-3xl font-black text-slate-800">{filteredStudents.length}</p>
-            </div>
+            <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold">
+              {asistencias.length} Total
+            </span>
           </div>
-        </div>
 
-        {/* Rejilla de Fraternidades */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {FRATERNITIES.filter(f => currentUserData.frat === 'all' || f.id === currentUserData.frat).map(frat => (
-            <div key={frat.id} className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[550px]">
-              <div className={`${frat.color} p-6 text-white flex items-center gap-3 font-black uppercase text-sm tracking-widest shadow-inner`}>
-                {frat.icon} {frat.name}
+          <div className="space-y-3 overflow-y-auto max-h-[500px] pr-2 custom-scrollbar">
+            {asistencias.length === 0 ? (
+              <div className="bg-white p-8 rounded-2xl border-2 border-dashed border-slate-200 text-center text-slate-400">
+                <Users size={48} className="mx-auto mb-2 opacity-20" />
+                <p>Aún no hay registros de asistencia</p>
               </div>
-              <div className="p-4 space-y-2 overflow-y-auto flex-1 bg-slate-50/30">
-                {filteredStudents.filter(s => s.fraternity === frat.id).length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center opacity-20 py-20 text-slate-400">
-                    <Search size={48} />
-                    <p className="text-[10px] font-black uppercase mt-2">Sin Alumnos</p>
+            ) : (
+              asistencias.map((item) => (
+                <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between group hover:border-blue-200 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-blue-50 text-blue-600 p-3 rounded-full group-hover:bg-blue-600 group-hover:text-white transition-all">
+                      <Users size={20} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-800 leading-tight">{item.nombre}</h3>
+                      <p className="text-xs text-slate-500">{item.grupo}</p>
+                    </div>
                   </div>
-                ) : (
-                  filteredStudents
-                    .filter(s => s.fraternity === frat.id)
-                    .sort((a,b) => a.name.localeCompare(b.name))
-                    .map(student => {
-                      const isPresent = attendanceRecords[`${selectedDate}_${student.id}`];
-                      return (
-                        <button 
-                          key={student.id} 
-                          onClick={() => toggleAttendance(student.id)} 
-                          className={`w-full flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                            isPresent ? `${frat.border} bg-white shadow-md scale-[1.02]` : 'border-transparent bg-white shadow-sm hover:border-slate-100'
-                          }`}
-                        >
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-black transition-all shadow-sm ${isPresent ? frat.color : 'bg-slate-100 text-slate-300'}`}>
-                            {isPresent ? <UserCheck size={20}/> : student.name[0]}
-                          </div>
-                          <span className={`text-xs font-black text-left flex-1 truncate ${isPresent ? 'text-slate-900' : 'text-slate-400'}`}>
-                            {student.name}
-                          </span>
-                        </button>
-                      );
-                    })
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+                  <div className="flex flex-col items-end">
+                    <div className="flex items-center gap-1 text-slate-400 text-[10px]">
+                      <Clock size={12} />
+                      {item.fecha?.seconds ? new Date(item.fecha.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...'}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
       </main>
+
+      <footer className="p-8 text-center text-slate-400 text-xs mt-auto">
+        <p>© 2024 Proyecto Fraternidades CBTIS 291 - Desarrollado para Control Escolar</p>
+      </footer>
     </div>
   );
->>>>>>> b67b464 (Initial commit: Sistema asistencia fraternidades)
 }
