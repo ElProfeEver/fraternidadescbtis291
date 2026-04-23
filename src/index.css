@@ -2,11 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Estilos base para que el scroll sea más fluido y limpio */
 body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+margin: 0;
+-webkit-font-smoothing: antialiased;
+-moz-osx-font-smoothing: grayscale;
+background-color: #f8fafc;
+}
+
+/* Personalización del scrollbar para un look más moderno */
+::-webkit-scrollbar {
+width: 6px;
+}
+
+::-webkit-scrollbar-track {
+background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+background: #e2e8f0;
+border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+background: #cbd5e1;
 }
