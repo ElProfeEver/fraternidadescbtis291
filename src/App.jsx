@@ -6,7 +6,7 @@ import {
   collection, 
   addDoc, 
   onSnapshot, 
-<<<<<<< HEAD
+
   query, 
   serverTimestamp 
 } from 'firebase/firestore';
@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN DE TU FIREBASE (Extraída de tu imagen) ---
-=======
+
   deleteDoc,
   query
 } from 'firebase/firestore';
